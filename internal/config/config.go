@@ -53,10 +53,16 @@ func (c *Config) validate() error {
 	if len(c.Jobs) == 0 {
 		return fmt.Errorf("at least one job must be defined")
 	}
+
+	seen := make(map[string]bool)
 	for i, job := range c.Jobs {
 		if job.Name == "" {
 			return fmt.Errorf("job[%d]: name is required", i)
 		}
+		if seen[job.Name] {
+			return fmt.Errorf("job[%d]: duplicate job name %q", i, job.Name)
+		}
+		seen[job.Name] = true
 		if job.Schedule == "" {
 			return fmt.Errorf("job %q: schedule is required", job.Name)
 		}
