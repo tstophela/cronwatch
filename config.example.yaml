@@ -1,0 +1,30 @@
+# cronwatch example configuration
+
+# How often cronwatch polls for missed or drifted jobs.
+check_interval: 1m
+
+jobs:
+  # A nightly database backup job.
+  - name: db-backup
+    schedule: "0 2 * * *"   # every day at 02:00
+    timeout: 15m             # alert if the job runs longer than this
+    command: /usr/local/bin/db-backup.sh
+
+  # Hourly log rotation.
+  - name: log-rotate
+    schedule: "0 * * * *"   # every hour
+    timeout: 5m
+    command: /usr/sbin/logrotate /etc/logrotate.conf
+
+  # Weekly report generation.
+  - name: weekly-report
+    schedule: "0 8 * * 1"   # every Monday at 08:00
+    timeout: 30m
+    command: /opt/reports/generate.sh
+
+alerts:
+  # Send failure notifications to this address (leave blank to disable).
+  email: ops@example.com
+
+  # Slack incoming webhook URL (leave blank to disable).
+  slack_url: https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ
