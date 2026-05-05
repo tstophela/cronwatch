@@ -103,3 +103,11 @@ func (t *Tracker) All() []Entry {
 	}
 	return out
 }
+
+// Delete removes the entry for jobName from the tracker.
+// It is a no-op if the job is not currently tracked.
+func (t *Tracker) Delete(jobName string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.entries, jobName)
+}
