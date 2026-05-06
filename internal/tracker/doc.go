@@ -8,5 +8,15 @@
 //	                ↑________________|
 //	                (Record resets to ok)
 //
-// Tracker is safe for concurrent use.
+// # States
+//
+// The unknown state applies to jobs that have never been recorded. Once a
+// successful execution is recorded, the job moves to ok. If the job misses
+// one or more expected executions, it transitions to late, and then to failed
+// once the configured miss threshold is exceeded. A successful Record call
+// always resets the job back to ok regardless of its current state.
+//
+// # Concurrency
+//
+// Tracker is safe for concurrent use by multiple goroutines.
 package tracker
