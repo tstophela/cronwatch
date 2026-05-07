@@ -28,3 +28,11 @@ alerts:
 
   # Slack incoming webhook URL (leave blank to disable).
   slack_url: https://hooks.slack.com/services/XXXXX/YYYYY/ZZZZZ
+
+  # Number of consecutive failures before an alert is sent.
+  # Useful to avoid noise from transient errors. Defaults to 1.
+  failure_threshold: 2
+
+  # Minimum time between repeated alerts for the same job.
+  # Prevents alert fatigue when a job fails repeatedly. Defaults to 1h.
+  alert_cooldown: 4h
