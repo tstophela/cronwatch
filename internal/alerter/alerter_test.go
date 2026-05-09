@@ -74,3 +74,19 @@ func TestMemorySink_Clear(t *testing.T) {
 		t.Errorf("expected 0 alerts after Clear, got %d", sink.Len())
 	}
 }
+
+func TestFire_AlertOccurredAt_IsRecent(t *testing.T) {
+	a, sink := newAlerterWithSink()
+	before := time.Now()
+	a.Fire(alerter.LevelError, "myjob", "something failed")
+	after := time.Now()
+
+	alerts := sink.All()
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+	occurred := alerts[0].OccurredAt
+	if occurred.Before(before) || occurred.After(after) {
+		t.Errorf("OccurredAt %v not within expected range [%v, %v]", occurred, before, after)
+	}
+}
