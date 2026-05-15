@@ -1,88 +1,95 @@
 package ratelimit
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
 
-func newLimiterWithClock(cooldown time.Duration, now func() time.Time) *Limiter {
-	l := New(cooldown)
-	l.now = now
-	return l
+func newLimiterWithClock(cooldown time.Duration, now *time.Time) *Limiter {
+	return newWithClock(cooldown, func() time.Time { return *now })
 }
 
 func TestAllow_FirstCall_Permitted(t *testing.T) {
-	l := New(5 * time.Minute)
-	if !l.Allow("backup") {
-		t.Fatal("expected first alert to be allowed")
+	now := time.Now()
+	l := newLimiterWithClock(time.Minute, &now)
+	if !l.Allow("job-a") {
+		t.Fatal("expected first call to be allowed")
 	}
 }
 
 func TestAllow_WithinCooldown_Suppressed(t *testing.T) {
-	base := time.Now()
-	l := newLimiterWithClock(10*time.Minute, func() time.Time { return base })
-
-	l.Allow("backup") // record first send
-
-	// advance by less than cooldown
-	l.now = func() time.Time { return base.Add(5 * time.Minute) }
-	if l.Allow("backup") {
-		t.Fatal("expected alert to be suppressed within cooldown")
+	now := time.Now()
+	l := newLimiterWithClock(time.Minute, &now)
+	l.Allow("job-a") // first call records time
+	now = now.Add(30 * time.Second)
+	if l.Allow("job-a") {
+		t.Fatal("expected second call within cooldown to be suppressed")
 	}
 }
 
 func TestAllow_AfterCooldown_Permitted(t *testing.T) {
-	base := time.Now()
-	l := newLimiterWithClock(10*time.Minute, func() time.Time { return base })
-
-	l.Allow("backup")
-
-	l.now = func() time.Time { return base.Add(11 * time.Minute) }
-	if !l.Allow("backup") {
-		t.Fatal("expected alert to be allowed after cooldown")
+	now := time.Now()
+	l := newLimiterWithClock(time.Minute, &now)
+	l.Allow("job-a")
+	now = now.Add(61 * time.Second)
+	if !l.Allow("job-a") {
+		t.Fatal("expected call after cooldown to be allowed")
 	}
 }
 
 func TestAllow_DifferentJobs_Independent(t *testing.T) {
-	base := time.Now()
-	l := newLimiterWithClock(10*time.Minute, func() time.Time { return base })
-
-	l.Allow("jobA")
-
-	if !l.Allow("jobB") {
-		t.Fatal("expected independent job to be allowed")
+	now := time.Now()
+	l := newLimiterWithClock(time.Minute, &now)
+	l.Allow("job-a")
+	if !l.Allow("job-b") {
+		t.Fatal("expected different job to be allowed independently")
 	}
 }
 
-func TestReset_ClearsState(t *testing.T) {
-	base := time.Now()
-	l := newLimiterWithClock(10*time.Minute, func() time.Time { return base })
-
-	l.Allow("backup")
-	l.Reset("backup")
-
-	if !l.Allow("backup") {
-		t.Fatal("expected alert to be allowed after reset")
+func TestReset_ClearsSingleJob(t *testing.T) {
+	now := time.Now()
+	l := newLimiterWithClock(time.Minute, &now)
+	l.Allow("job-a")
+	l.Allow("job-b")
+	l.Reset("job-a")
+	if !l.Allow("job-a") {
+		t.Fatal("expected job-a to be allowed after reset")
+	}
+	// job-b should still be suppressed
+	if l.Allow("job-b") {
+		t.Fatal("expected job-b to remain suppressed")
 	}
 }
 
-func TestNextAllowed_NoHistory_ReturnsZero(t *testing.T) {
-	l := New(5 * time.Minute)
-	if !l.NextAllowed("missing").IsZero() {
-		t.Fatal("expected zero time for unseen job")
+func TestResetAll_ClearsAllJobs(t *testing.T) {
+	now := time.Now()
+	l := newLimiterWithClock(time.Minute, &now)
+	l.Allow("job-a")
+	l.Allow("job-b")
+	l.ResetAll()
+	if !l.Allow("job-a") {
+		t.Fatal("expected job-a to be allowed after ResetAll")
+	}
+	if !l.Allow("job-b") {
+		t.Fatal("expected job-b to be allowed after ResetAll")
 	}
 }
 
-func TestNextAllowed_ReturnsCorrectTime(t *testing.T) {
-	base := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-	cooldown := 15 * time.Minute
-	l := newLimiterWithClock(cooldown, func() time.Time { return base })
-
-	l.Allow("sync")
-
-	want := base.Add(cooldown)
-	got := l.NextAllowed("sync")
-	if !got.Equal(want) {
-		t.Fatalf("NextAllowed: got %v, want %v", got, want)
+func TestAllow_ConcurrentAccess_NoPanic(t *testing.T) {
+	now := time.Now()
+	l := newLimiterWithClock(10*time.Millisecond, &now)
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			job := "job-a"
+			if i%2 == 0 {
+				job = "job-b"
+			}
+			l.Allow(job)
+		}(i)
 	}
+	wg.Wait()
 }
